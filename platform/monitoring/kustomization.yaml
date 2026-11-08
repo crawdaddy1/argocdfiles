@@ -3,4 +3,4 @@ kind: Kustomization
 namespace: monitoring
 resources:
   - ingress.yaml
-  # - grafana-admin-sealed.yaml   # add once generated with kubeseal (see README "Monitoring")
+  - grafana-admin-sealed.yaml   # Grafana admin login, sealed with this cluster's key
