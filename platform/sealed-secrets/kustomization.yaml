@@ -1,0 +1,6 @@
+# Upstream controller + CRD, pinned. Bump the version to upgrade.
+# Client: install kubeseal at the same version (brew install kubeseal, or the release tarball).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/bitnami/sealed-secrets/releases/download/v0.40.0/controller.yaml

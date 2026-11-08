@@ -1,0 +1,38 @@
+# Tailscale Kubernetes operator: puts annotated Services on the tailnet
+# (tailscale.com/expose: "true" + tailscale.com/hostname: <name>).
+# Needs the operator-oauth secret — committed sealed in platform/tailscale-operator/.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tailscale-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://pkgs.tailscale.com/helmcharts
+      chart: tailscale-operator
+      targetRevision: 1.102.2
+      helm:
+        releaseName: tailscale-operator
+        valuesObject:
+          operatorConfig:
+            hostname: k8s-operator       # name of the operator on your tailnet
+          # oauth.clientId / clientSecret deliberately left empty: the chart then uses the
+          # existing "operator-oauth" Secret, which comes from the SealedSecret below.
+    - repoURL: https://github.com/crawdaddy1/argocdfiles.git
+      targetRevision: main
+      path: platform/tailscale-operator
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tailscale
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
