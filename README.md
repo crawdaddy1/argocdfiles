@@ -176,6 +176,7 @@ To deploy to a different cluster later, register the cluster with Argo CD (`argo
   - empty namespaces
   - unpinned images
 - Restarts only count if the container last restarted within RESTART_WINDOW_DAYS (default 7). Workloads created by Argo-managed operators (Tailscale, Longhorn) are not flagged as unmanaged.
+- It flags any cluster-admin binding except Kubernetes' own groups (system:masters, kubeadm:cluster-admins). To allow one on purpose, set ADMIN_ALLOW in the CronJob, e.g. `ServiceAccount:ns/name`.
 - Severities: `problem` (fix it), `unused` (safe-to-remove candidate), `drift`, `review`.
 
 Run it now:

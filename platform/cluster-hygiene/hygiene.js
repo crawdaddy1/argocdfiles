@@ -40,7 +40,7 @@ const nsName = (o) => (o.metadata.namespace ? o.metadata.namespace + '/' : '') +
 
 async function main() {
   const L = async (p) => { const r = await get(p); if (r.error) errors.push(r.error); return r; };
-  const [pods, svcs, pvcs, pvs, nodes, nss, ings, ingClasses, jobs, deps, stss, dss, vwh, mwh, apps, lhVols, apiSvcs] = await Promise.all([
+  const [pods, svcs, pvcs, pvs, nodes, nss, ings, ingClasses, jobs, deps, stss, dss, vwh, mwh, apps, lhVols, apiSvcs, crbs, rbs] = await Promise.all([
     L('/api/v1/pods'), L('/api/v1/services'), L('/api/v1/persistentvolumeclaims'), L('/api/v1/persistentvolumes'),
     L('/api/v1/nodes'), L('/api/v1/namespaces'), L('/apis/networking.k8s.io/v1/ingresses'),
     L('/apis/networking.k8s.io/v1/ingressclasses'), L('/apis/batch/v1/jobs'), L('/apis/apps/v1/deployments'),
@@ -49,6 +49,7 @@ async function main() {
     L('/apis/admissionregistration.k8s.io/v1/mutatingwebhookconfigurations'),
     L('/apis/argoproj.io/v1alpha1/applications'), L('/apis/longhorn.io/v1beta2/volumes'),
     L('/apis/apiregistration.k8s.io/v1/apiservices'),
+    L('/apis/rbac.authorization.k8s.io/v1/clusterrolebindings'), L('/apis/rbac.authorization.k8s.io/v1/rolebindings'),
   ]);
 
   // --- Nodes: not ready, cordoned, mismatched kubelet versions
@@ -170,6 +171,21 @@ async function main() {
   for (const a of apiSvcs.items) {
     const av = (a.status && a.status.conditions || []).find((c) => c.type === 'Available');
     if (av && av.status !== 'True') add('apiservice_unavailable', 'problem', a.metadata.name, (av.reason || '') + ' ' + (av.message || '').slice(0, 160));
+  }
+
+  // --- Who holds cluster-admin. Kubernetes' own groups are expected; anything else (a service account,
+  //     a person, a custom group) is full control of the cluster and should be a deliberate choice.
+  const ADMIN_OK = new Set(['Group:system:masters', 'Group:kubeadm:cluster-admins']
+    .concat((process.env.ADMIN_ALLOW || '').split(',').map((x) => x.trim()).filter(Boolean)));
+  for (const b of crbs.items.concat(rbs.items)) {
+    if (!(b.roleRef && b.roleRef.kind === 'ClusterRole' && b.roleRef.name === 'cluster-admin')) continue;
+    const scope = b.metadata.namespace ? 'namespace ' + b.metadata.namespace : 'whole cluster';
+    for (const sub of b.subjects || []) {
+      const who = sub.kind + ':' + (sub.namespace ? sub.namespace + '/' : '') + sub.name;
+      if (ADMIN_OK.has(sub.kind + ':' + sub.name) || ADMIN_OK.has(who)) continue;
+      add('cluster_admin_binding', sub.kind === 'ServiceAccount' ? 'problem' : 'review', (b.metadata.namespace ? 'RoleBinding ' : 'ClusterRoleBinding ') + nsName(b),
+        who + ' has cluster-admin (' + scope + ')');
+    }
   }
 
   // --- Namespaces with nothing running in them
