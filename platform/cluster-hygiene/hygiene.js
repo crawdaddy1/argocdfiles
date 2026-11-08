@@ -10,6 +10,7 @@ const API = process.env.API_URL || 'https://kubernetes.default.svc';
 const TOKEN = process.env.API_TOKEN || (fs.existsSync(SA + '/token') ? fs.readFileSync(SA + '/token', 'utf8') : '');
 const CA = fs.existsSync(SA + '/ca.crt') ? fs.readFileSync(SA + '/ca.crt') : undefined;
 const RESTART_THRESHOLD = Number(process.env.RESTART_THRESHOLD || 5);
+const RESTART_WINDOW_DAYS = Number(process.env.RESTART_WINDOW_DAYS || 7);
 
 function get(path) {
   return new Promise((resolve) => {
@@ -68,7 +69,13 @@ async function main() {
       if (w && /CrashLoopBackOff|ImagePullBackOff|ErrImagePull|CreateContainerConfigError|InvalidImageName/.test(w.reason || '')) {
         add('container_waiting', 'problem', nsName(p) + ':' + c.name, w.reason + (w.message ? ' - ' + w.message.slice(0, 160) : ''));
       }
-      if (c.restartCount > RESTART_THRESHOLD) add('container_restarts', 'problem', nsName(p) + ':' + c.name, c.restartCount + ' restarts');
+      // Only flag restarts that happened in the last RESTART_WINDOW_DAYS; old ones (node reboots) are history.
+      const last = c.lastState && c.lastState.terminated;
+      const recent = last && last.finishedAt && (Date.now() - Date.parse(last.finishedAt)) < RESTART_WINDOW_DAYS * 86400e3;
+      if (c.restartCount > RESTART_THRESHOLD && recent) {
+        add('container_restarts', 'problem', nsName(p) + ':' + c.name, c.restartCount + ' restarts total; last stopped ' + last.finishedAt +
+          ' (' + (last.reason || 'exit') + ' code ' + last.exitCode + ')');
+      }
     }
     if (phase === 'Failed' || phase === 'Unknown') add('pod_failed', 'unused', nsName(p), phase + (p.status.reason ? ' (' + p.status.reason + ')' : '') + '; delete it');
     if (phase === 'Pending') {
@@ -145,10 +152,13 @@ async function main() {
   const tracked = (o) => {
     const a = o.metadata.annotations || {};
     const l = o.metadata.labels || {};
-    return a['argocd.argoproj.io/tracking-id'] || l['app.kubernetes.io/instance'] || l['argocd.argoproj.io/instance'];
+    return a['argocd.argoproj.io/tracking-id'] || l['app.kubernetes.io/instance'] || l['argocd.argoproj.io/instance'] ||
+      // created by an operator that Argo CD manages (Tailscale proxies, Longhorn CSI driver, ...)
+      l['tailscale.com/managed'] || Object.keys(l).some((k) => k.endsWith('/managed-by'));
   };
   const owned = (o) => (o.metadata.ownerReferences || []).length > 0;
-  for (const w of deps.items.concat(stss.items, dss.items)) {
+  const withKind = (list, kind) => list.items.map((o) => Object.assign({ kind }, o));
+  for (const w of withKind(deps, 'Deployment').concat(withKind(stss, 'StatefulSet'), withKind(dss, 'DaemonSet'))) {
     if (SYSTEM_NS.has(w.metadata.namespace) || owned(w) || w.metadata.namespace === 'argocd') continue;
     if (!tracked(w)) add('workload_unmanaged', 'review', w.kind + ' ' + nsName(w), 'not managed by Argo CD (manual install?)');
   }

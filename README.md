@@ -175,6 +175,7 @@ To deploy to a different cluster later, register the cluster with Argo CD (`argo
   - workloads Argo CD doesn't manage
   - empty namespaces
   - unpinned images
+- Restarts only count if the container last restarted within RESTART_WINDOW_DAYS (default 7). Workloads created by Argo-managed operators (Tailscale, Longhorn) are not flagged as unmanaged.
 - Severities: `problem` (fix it), `unused` (safe-to-remove candidate), `drift`, `review`.
 
 Run it now:
