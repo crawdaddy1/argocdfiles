@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cluster-hygiene
+spec:
+  schedule: "0 7 * * 1"          # Mondays 7:00 am
+  timeZone: America/New_York
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 604800   # keep a week so the pod log is still there
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: cluster-hygiene
+        spec:
+          serviceAccountName: cluster-hygiene
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: hygiene
+              image: node:22-alpine
+              command: ["node", "/scripts/hygiene.js"]
+              env:
+                - name: RESTART_THRESHOLD
+                  value: "5"
+              resources:
+                requests: { cpu: 20m, memory: 64Mi }
+                limits: { memory: 256Mi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: [ALL] }
+              volumeMounts:
+                - { name: script, mountPath: /scripts, readOnly: true }
+          volumes:
+            - name: script
+              configMap:
+                name: cluster-hygiene-script

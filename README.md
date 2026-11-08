@@ -157,3 +157,34 @@ To deploy to a different cluster later, register the cluster with Argo CD (`argo
 | loki | grafana-community chart 21.0.0 | monitoring | (via Grafana) |
 | alloy | grafana chart 1.15.0 | monitoring | — |
 | strat1990 | crawdaddy1/strat1990 `deploy/` | strat1990 | https://strat-stats.&lt;tailnet&gt;.ts.net · https://strat-sheet.&lt;tailnet&gt;.ts.net |
+
+## Weekly cluster hygiene report
+
+`apps/cluster-hygiene.yaml` deploys `platform/cluster-hygiene`: a read-only CronJob in `monitoring` that runs every Monday at 7:00 am ET.
+
+- It has no access to Secrets or ConfigMaps, and it changes nothing.
+- It checks for:
+  - not-ready or cordoned nodes, and kubelet version skew
+  - crash-looping containers and restarting pods
+  - failed or stuck pods and jobs
+  - LoadBalancers with no address, and NodePorts
+  - webhooks that point at deleted services
+  - unused IngressClasses
+  - unbound, unmounted or released volumes, and unhealthy or orphaned Longhorn volumes
+  - Argo CD apps that are not Synced/Healthy
+  - workloads Argo CD doesn't manage
+  - empty namespaces
+  - unpinned images
+- Severities: `problem` (fix it), `unused` (safe-to-remove candidate), `drift`, `review`.
+
+Run it now:
+
+    kubectl -n monitoring create job --from=cronjob/cluster-hygiene hygiene-$(date +%s)
+    kubectl -n monitoring logs -f job/<name printed above>
+
+View in Grafana → Explore → Loki:
+
+    {namespace="monitoring", container="hygiene"} | json | hygiene="finding"
+    {namespace="monitoring", container="hygiene"} | json | hygiene="summary"
+
+Never delete from the report directly. Preview first, then remove the resource through git (or by hand for things Argo CD doesn't manage).

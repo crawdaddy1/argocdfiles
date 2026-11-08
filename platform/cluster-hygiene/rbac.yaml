@@ -1,0 +1,45 @@
+# Read-only. Deliberately no access to Secrets or ConfigMaps.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-hygiene
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-hygiene-reader
+rules:
+  - apiGroups: [""]
+    resources: [pods, services, persistentvolumeclaims, persistentvolumes, nodes, namespaces]
+    verbs: [get, list]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses, ingressclasses]
+    verbs: [get, list]
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, daemonsets]
+    verbs: [get, list]
+  - apiGroups: [admissionregistration.k8s.io]
+    resources: [validatingwebhookconfigurations, mutatingwebhookconfigurations]
+    verbs: [get, list]
+  - apiGroups: [argoproj.io]
+    resources: [applications]
+    verbs: [get, list]
+  - apiGroups: [longhorn.io]
+    resources: [volumes]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-hygiene-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-hygiene-reader
+subjects:
+  - kind: ServiceAccount
+    name: cluster-hygiene
+    namespace: monitoring
