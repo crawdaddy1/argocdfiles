@@ -74,6 +74,13 @@ spec:
                     drop_counter_reason = "apiserver_etcd_dial_canceled"
                   }
                 }
+                // Informational (I...) API-server warnings that client libraries relay into their own logs:
+                // Calico's "unknown field \"status\"" and the v1 Endpoints deprecation notice. Not actionable
+                // here; they go away when the component that triggers them is upgraded.
+                stage.drop {
+                  expression          = `^I\d{4} .*warnings\.go:\d+\] "Warning: (unknown field \\"status\\"|v1 Endpoints is deprecated in v1\.33\+)`
+                  drop_counter_reason = "relayed_api_deprecation_info"
+                }
                 forward_to = [loki.write.default.receiver]
               }
               // Kubernetes events (pod restarts, image pulls, scheduling problems).
