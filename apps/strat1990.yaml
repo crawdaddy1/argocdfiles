@@ -11,7 +11,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/crawdaddy1/strat1990.git
+    repoURL: git@github.com:crawdaddy1/strat1990.git   # private repo: read via SSH deploy key
     targetRevision: main
     path: deploy
   destination:
