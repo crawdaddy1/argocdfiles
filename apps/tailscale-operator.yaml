@@ -17,19 +17,12 @@ spec:
   sources:
     - repoURL: https://pkgs.tailscale.com/helmcharts
       chart: tailscale-operator
-      # Charts are only published for operator releases (latest 1.104.1); patch releases ship images only,
-      # so pin both images to the newest patch for its security fixes (TS-2026-013..017).
-      targetRevision: 1.104.1
+      targetRevision: 1.104.1            # latest published operator chart
       helm:
         releaseName: tailscale-operator
         valuesObject:
           operatorConfig:
             hostname: k8s-operator       # name of the operator on your tailnet
-            image:
-              tag: v1.104.5
-          proxyConfig:
-            image:
-              tag: v1.104.5              # the per-Ingress proxies (ts-* pods)
           # oauth.clientId / clientSecret deliberately left empty: the chart then uses the
           # existing "operator-oauth" Secret, which comes from the SealedSecret below.
     - repoURL: https://github.com/crawdaddy1/argocdfiles.git
