@@ -1,0 +1,9 @@
+# Kubernetes volume snapshot API (VolumeSnapshot, VolumeSnapshotClass, VolumeSnapshotContent CRDs)
+# and the cluster-wide snapshot controller. Longhorn's csi-snapshotter needs these; without them it
+# logs "could not find the requested resource (get volumesnapshotclasses.snapshot.storage.k8s.io)".
+# Pinned upstream release; bump both refs together to upgrade.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/kubernetes-csi/external-snapshotter//client/config/crd?ref=v8.7.0
+  - https://github.com/kubernetes-csi/external-snapshotter//deploy/kubernetes/snapshot-controller?ref=v8.7.0

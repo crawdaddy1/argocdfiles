@@ -6,6 +6,7 @@ GitOps definitions for the apps on my clusters, using the Argo CD **app-of-apps*
 bootstrap/root.yaml          the one Application you apply by hand; it watches apps/
 apps/                        one Argo CD Application per app (commit a file here to deploy something)
   sealed-secrets.yaml        wave -2  Secrets encrypted so they're safe to keep in git
+  snapshot-controller.yaml   wave -2  Kubernetes volume snapshot API + controller (used by Longhorn)
   tailscale-operator.yaml    wave -1  puts Services on the tailnet
   longhorn.yaml              wave -1  replicated storage; default StorageClass
   kube-prometheus-stack.yaml wave  0  Prometheus + Grafana (+ node-exporter, kube-state-metrics)
@@ -150,6 +151,7 @@ To deploy to a different cluster later, register the cluster with Argo CD (`argo
 |-----|--------|-----------|-------------|
 | sealed-secrets | upstream v0.40.0 | kube-system | — |
 | tailscale-operator | pkgs.tailscale.com chart 1.102.2 | tailscale | — |
+| snapshot-controller | kubernetes-csi/external-snapshotter v8.7.0 | kube-system | — |
 | longhorn | charts.longhorn.io 1.12.0 | longhorn-system | https://longhorn.&lt;tailnet&gt;.ts.net |
 | kube-prometheus-stack | prometheus-community chart 93.1.0 | monitoring | https://grafana.taila044fc.ts.net · https://prometheus.taila044fc.ts.net |
 | loki | grafana-community chart 21.0.0 | monitoring | (via Grafana) |

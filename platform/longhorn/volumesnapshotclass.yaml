@@ -1,0 +1,19 @@
+# Lets you snapshot any Longhorn volume the Kubernetes way, e.g. before a MySQL upgrade:
+#   kubectl -n strat1990 apply -f - <<'Y'
+#   apiVersion: snapshot.storage.k8s.io/v1
+#   kind: VolumeSnapshot
+#   metadata: { name: mysql-before-upgrade }
+#   spec: { volumeSnapshotClassName: longhorn, source: { persistentVolumeClaimName: data-mysql-0 } }
+#   Y
+# type=snap keeps the snapshot inside the Longhorn volume (fast, local). Use type=bak once a
+# backup target (S3/NFS) is configured in Longhorn to copy snapshots off the cluster.
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: longhorn
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+driver: driver.longhorn.io
+deletionPolicy: Delete
+parameters:
+  type: snap
