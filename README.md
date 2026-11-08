@@ -8,6 +8,9 @@ apps/                        one Argo CD Application per app (commit a file here
   sealed-secrets.yaml        wave -2  Secrets encrypted so they're safe to keep in git
   tailscale-operator.yaml    wave -1  puts Services on the tailnet
   longhorn.yaml              wave -1  replicated storage; default StorageClass
+  kube-prometheus-stack.yaml wave  0  Prometheus + Grafana (+ node-exporter, kube-state-metrics)
+  loki.yaml                  wave  0  log storage (14 days)
+  alloy.yaml                 wave  1  ships pod logs and Kubernetes events to Loki
   strat1990.yaml             wave  0  Strat-O-Matic replay (manifests in crawdaddy1/strat1990/deploy)
 platform/                    manifests for the cluster add-ons above
 ```
@@ -101,6 +104,25 @@ Then check: `kubectl -n longhorn-system get pods` should be all Running, and `ku
 
 Replicas protect against a dead disk or node, not against deleting data by mistake. strat1990 also makes nightly `mysqldump` backups. Longhorn can additionally back up volumes to S3 or NFS (Settings → Backup Target) if you want off-cluster copies.
 
+## Monitoring
+
+- **Grafana** https://grafana.taila044fc.ts.net: the dashboard "Strat-O-Matic '90 A's Replay" is provisioned from
+  the strat1990 repo. Use Explore → Loki for ad-hoc log searches like `{namespace="strat1990", app="scoresheet"}`.
+- **Prometheus** https://prometheus.taila044fc.ts.net (15 days / 18 GB of metrics)
+- Apps are scraped through ServiceMonitors in their own repos; any namespace works.
+
+**One-time: the Grafana admin login** (sealed, so it's safe in this public repo):
+
+```sh
+kubectl create secret generic grafana-admin -n monitoring --dry-run=client -o yaml \
+  --from-literal=admin-user=admin \
+  --from-literal=admin-password="$(/usr/bin/openssl rand -base64 18)" \
+| kubeseal -o yaml > platform/monitoring/grafana-admin-sealed.yaml
+```
+
+Uncomment it in `platform/monitoring/kustomization.yaml` and commit. To read the password later:
+`kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d`
+
 ## Adding another app
 
 Commit `apps/<name>.yaml` pointing at the app's manifests. To put it on the tailnet with a valid
@@ -129,4 +151,7 @@ To deploy to a different cluster later, register the cluster with Argo CD (`argo
 | sealed-secrets | upstream v0.40.0 | kube-system | — |
 | tailscale-operator | pkgs.tailscale.com chart 1.102.2 | tailscale | — |
 | longhorn | charts.longhorn.io 1.12.0 | longhorn-system | https://longhorn.&lt;tailnet&gt;.ts.net |
+| kube-prometheus-stack | prometheus-community chart 93.1.0 | monitoring | https://grafana.taila044fc.ts.net · https://prometheus.taila044fc.ts.net |
+| loki | grafana-community chart 21.0.0 | monitoring | (via Grafana) |
+| alloy | grafana chart 1.15.0 | monitoring | — |
 | strat1990 | crawdaddy1/strat1990 `deploy/` | strat1990 | https://strat-stats.&lt;tailnet&gt;.ts.net · https://strat-sheet.&lt;tailnet&gt;.ts.net |

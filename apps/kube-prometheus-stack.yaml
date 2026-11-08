@@ -1,0 +1,71 @@
+# Prometheus + Grafana (+ node-exporter, kube-state-metrics, Prometheus Operator and its CRDs).
+# Grafana:    https://grafana.taila044fc.ts.net      Prometheus: https://prometheus.taila044fc.ts.net
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 93.1.0
+      helm:
+        releaseName: kube-prometheus-stack
+        valuesObject:
+          # Control-plane components on a kubeadm cluster listen on localhost only; scraping them just
+          # produces "target down" noise. Node, pod, and app metrics are unaffected.
+          kubeEtcd: { enabled: false }
+          kubeScheduler: { enabled: false }
+          kubeControllerManager: { enabled: false }
+          kubeProxy: { enabled: false }
+          alertmanager: { enabled: false }      # turn on when we add alert routing
+          grafana:
+            admin:
+              existingSecret: grafana-admin     # sealed secret in platform/monitoring/
+              userKey: admin-user
+              passwordKey: admin-password
+            persistence: { enabled: true, size: 5Gi }
+            grafana.ini:
+              server:
+                root_url: https://grafana.taila044fc.ts.net
+            additionalDataSources:
+              - name: Loki
+                type: loki
+                uid: loki
+                access: proxy
+                url: http://loki.monitoring.svc.cluster.local:3100
+                jsonData: { maxLines: 2000 }
+          prometheus:
+            prometheusSpec:
+              # Pick up ServiceMonitors/PodMonitors/rules from every namespace, not just this release.
+              serviceMonitorSelectorNilUsesHelmValues: false
+              podMonitorSelectorNilUsesHelmValues: false
+              ruleSelectorNilUsesHelmValues: false
+              retention: 15d
+              retentionSize: 18GB
+              resources:
+                requests: { cpu: 200m, memory: 1Gi }
+                limits: { memory: 2Gi }
+              storageSpec:
+                volumeClaimTemplate:
+                  spec:
+                    accessModes: [ReadWriteOnce]
+                    resources: { requests: { storage: 20Gi } }
+    - repoURL: https://github.com/crawdaddy1/argocdfiles.git
+      targetRevision: main
+      path: platform/monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true     # the Prometheus Operator CRDs are too large for client-side apply
