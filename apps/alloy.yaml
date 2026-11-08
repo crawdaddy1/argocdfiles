@@ -60,6 +60,20 @@ spec:
               }
               loki.source.kubernetes "pods" {
                 targets    = discovery.relabel.pods.output
+                forward_to = [loki.process.drop_noise.receiver]
+              }
+              // Drop known-harmless noise before it reaches Loki. Scoped to the exact message and pod,
+              // so every other kube-system log line is kept.
+              loki.process "drop_noise" {
+                // kube-apiserver logs this whenever a request is cancelled while it is opening an etcd
+                // connection; benign on its own (a real etcd problem says "refused" or "deadline exceeded").
+                stage.match {
+                  selector = "{namespace=\"kube-system\", container=\"kube-apiserver\"}"
+                  stage.drop {
+                    expression          = `createTransport failed to connect to \{Addr: "127\.0\.0\.1:2379".*operation was canceled`
+                    drop_counter_reason = "apiserver_etcd_dial_canceled"
+                  }
+                }
                 forward_to = [loki.write.default.receiver]
               }
               // Kubernetes events (pod restarts, image pulls, scheduling problems).
