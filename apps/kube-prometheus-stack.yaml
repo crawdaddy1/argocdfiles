@@ -32,6 +32,9 @@ spec:
               userKey: admin-user
               passwordKey: admin-password
             persistence: { enabled: true, size: 5Gi }
+            # The volume is ReadWriteOnce: stop the old pod before starting the new one, so a
+            # rolling update never has two pods fighting over the same Longhorn volume.
+            deploymentStrategy: { type: Recreate }
             grafana.ini:
               server:
                 root_url: https://grafana.taila044fc.ts.net
