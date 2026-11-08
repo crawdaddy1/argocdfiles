@@ -87,7 +87,7 @@ kubectl -n kube-system get secret -l sealedsecrets.bitnami.com/sealed-secrets-ke
 
 ## Storage (Longhorn)
 
-Longhorn keeps 3 copies of every volume, one on each worker, so losing a node loses no data. It's the cluster's **default StorageClass**, so app manifests don't need to name one. The dashboard is at **http://longhorn** on the tailnet.
+Longhorn keeps 3 copies of every volume, one on each worker, so losing a node loses no data. It's the cluster's **default StorageClass**, so app manifests don't need to name one. The dashboard is at **https://longhorn.<tailnet>.ts.net** on the tailnet.
 
 **Before the first sync**, on each of the 3 workers:
 
@@ -103,12 +103,21 @@ Replicas protect against a dead disk or node, not against deleting data by mista
 
 ## Adding another app
 
-Commit `apps/<name>.yaml` pointing at the app's manifests. To expose it on the tailnet, add these annotations to its Service:
+Commit `apps/<name>.yaml` pointing at the app's manifests. To put it on the tailnet with a valid
+HTTPS certificate (Let's Encrypt via Tailscale; needs **HTTPS Certificates** enabled on the Tailscale
+DNS page), give it a Tailscale Ingress:
 
 ```yaml
-annotations:
-  tailscale.com/expose: "true"
-  tailscale.com/hostname: <name>
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: <name>
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service: { name: <service>, port: { number: 80 } }
+  tls:
+    - hosts: [<name>]        # becomes https://<name>.<tailnet>.ts.net
 ```
 
 To deploy to a different cluster later, register the cluster with Argo CD (`argocd cluster add`) and change the `destination.server` of the apps you want there.
@@ -119,5 +128,5 @@ To deploy to a different cluster later, register the cluster with Argo CD (`argo
 |-----|--------|-----------|-------------|
 | sealed-secrets | upstream v0.40.0 | kube-system | — |
 | tailscale-operator | pkgs.tailscale.com chart 1.102.2 | tailscale | — |
-| longhorn | charts.longhorn.io 1.12.0 | longhorn-system | http://longhorn |
-| strat1990 | crawdaddy1/strat1990 `deploy/` | strat1990 | http://strat-stats · http://strat-sheet |
+| longhorn | charts.longhorn.io 1.12.0 | longhorn-system | https://longhorn.&lt;tailnet&gt;.ts.net |
+| strat1990 | crawdaddy1/strat1990 `deploy/` | strat1990 | https://strat-stats.&lt;tailnet&gt;.ts.net · https://strat-sheet.&lt;tailnet&gt;.ts.net |

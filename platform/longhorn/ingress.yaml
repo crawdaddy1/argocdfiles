@@ -1,0 +1,16 @@
+# Longhorn dashboard at https://longhorn.<your-tailnet>.ts.net (Let's Encrypt via Tailscale).
+# The dashboard has no login of its own, so it is only reachable from your tailnet.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: longhorn-ui-tailnet
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: longhorn-frontend
+      port:
+        number: 80
+  tls:
+    - hosts:
+        - longhorn

@@ -1,0 +1,19 @@
+# Argo CD UI at https://argocd.<your-tailnet>.ts.net with a Let's Encrypt certificate from Tailscale.
+# The backend is argocd-server's HTTPS port; because it is port 443, the Tailscale proxy connects
+# over HTTPS and accepts Argo CD's self-signed certificate internally, so the browser only ever
+# sees the valid Tailscale certificate.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server-tailnet
+  namespace: argocd
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: argocd-server
+      port:
+        number: 443
+  tls:
+    - hosts:
+        - argocd
