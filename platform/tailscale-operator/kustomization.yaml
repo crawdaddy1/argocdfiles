@@ -1,6 +1,5 @@
-# Add operator-oauth-sealed.yaml here once it's generated (see README), then uncomment.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: tailscale
-resources: []
-#  - operator-oauth-sealed.yaml
+resources:
+  - operator-oauth-sealed.yaml   # OAuth client for the operator, sealed with this cluster's key
