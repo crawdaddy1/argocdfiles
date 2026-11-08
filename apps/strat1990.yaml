@@ -1,0 +1,30 @@
+# Strat-O-Matic 1990 A's replay: MySQL, score sheet, and season stats.
+# Manifests live with the code in crawdaddy1/strat1990 (deploy/); its GitHub Actions build
+# pins new image tags there, and Argo CD rolls them out.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: strat1990
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/crawdaddy1/strat1990.git
+    targetRevision: main
+    path: deploy
+  destination:
+    server: https://kubernetes.default.svc   # this cluster; change to deploy somewhere else
+    namespace: strat1990
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/volumeClaimTemplates

@@ -1,0 +1,21 @@
+# App of apps. Apply this ONCE by hand:
+#   kubectl apply -n argocd -f bootstrap/root.yaml
+# After that Argo CD manages everything under apps/: to deploy a new app, commit a file there.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/crawdaddy1/argocdfiles.git
+    targetRevision: main
+    path: apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
