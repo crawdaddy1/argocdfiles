@@ -7,6 +7,7 @@ bootstrap/root.yaml          the one Application you apply by hand; it watches a
 apps/                        one Argo CD Application per app (commit a file here to deploy something)
   sealed-secrets.yaml        wave -2  Secrets encrypted so they're safe to keep in git
   tailscale-operator.yaml    wave -1  puts Services on the tailnet
+  longhorn.yaml              wave -1  replicated storage; default StorageClass
   strat1990.yaml             wave  0  Strat-O-Matic replay (manifests in crawdaddy1/strat1990/deploy)
 platform/                    manifests for the cluster add-ons above
 ```
@@ -23,7 +24,7 @@ This repo is **public**. Only *sealed* secrets go in it: they're encrypted with 
 kubectl apply -n argocd -f bootstrap/root.yaml
 ```
 
-Sealed Secrets and the Tailscale operator install themselves. The Tailscale operator waits for its credentials (step 3), and strat1990 waits for its secrets (step 4).
+Sealed Secrets, Longhorn and the Tailscale operator install themselves (do the Longhorn node prep in **Storage** below first). The Tailscale operator waits for its credentials (step 3), and strat1990 waits for its secrets (step 4).
 
 ### 2. Install kubeseal on your laptop
 
@@ -84,16 +85,21 @@ kubectl -n kube-system get secret -l sealedsecrets.bitnami.com/sealed-secrets-ke
 
 ---
 
-## Storage
+## Storage (Longhorn)
 
-The manifests leave `storageClassName` unset, so they use the cluster's default class. Check what you have:
+Longhorn keeps 3 copies of every volume, one on each worker, so losing a node loses no data. It's the cluster's **default StorageClass**, so app manifests don't need to name one. The dashboard is at **http://longhorn** on the tailnet.
+
+**Before the first sync**, on each of the 3 workers:
 
 ```sh
-kubectl get storageclass
+sudo apt-get install -y open-iscsi nfs-common
+sudo systemctl enable --now iscsid
 ```
 
-- **kops on AWS/GCP/etc.:** kops installs the cloud CSI driver and a default class (for example `kops-csi-1-21` on gp3), so you don't need anything else.
-- **No default class (bare metal):** install [Longhorn](https://longhorn.io). It replicates volumes across your 3 workers and does snapshots and backups. It's another file in `apps/`.
+Then check: `kubectl -n longhorn-system get pods` should be all Running, and `kubectl get storageclass` should show `longhorn (default)`. If another class is also marked default, unmark it:
+`kubectl patch storageclass <other> -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'`
+
+Replicas protect against a dead disk or node, not against deleting data by mistake. strat1990 also makes nightly `mysqldump` backups. Longhorn can additionally back up volumes to S3 or NFS (Settings → Backup Target) if you want off-cluster copies.
 
 ## Adding another app
 
@@ -113,4 +119,5 @@ To deploy to a different cluster later, register the cluster with Argo CD (`argo
 |-----|--------|-----------|-------------|
 | sealed-secrets | upstream v0.40.0 | kube-system | — |
 | tailscale-operator | pkgs.tailscale.com chart 1.102.2 | tailscale | — |
+| longhorn | charts.longhorn.io 1.12.0 | longhorn-system | http://longhorn |
 | strat1990 | crawdaddy1/strat1990 `deploy/` | strat1990 | http://strat-stats · http://strat-sheet |

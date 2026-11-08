@@ -1,0 +1,44 @@
+# Longhorn: replicated block storage across the worker nodes, and the cluster's default StorageClass.
+# Node prerequisites (once per worker): sudo apt-get install -y open-iscsi nfs-common && sudo systemctl enable --now iscsid
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: longhorn
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://charts.longhorn.io
+      chart: longhorn
+      targetRevision: 1.12.0
+      helm:
+        releaseName: longhorn
+        valuesObject:
+          preUpgradeChecker:
+            jobEnabled: false          # required under Argo CD (the hook job otherwise blocks syncs)
+          persistence:
+            defaultClass: true
+            defaultClassReplicaCount: 3  # one copy of each volume on each of the 3 workers
+            reclaimPolicy: Retain        # deleting a PVC doesn't throw away the data
+          defaultSettings:
+            defaultReplicaCount: 3
+            defaultDataPath: /var/lib/longhorn
+            storageMinimalAvailablePercentage: 15
+            nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod
+    - repoURL: https://github.com/crawdaddy1/argocdfiles.git
+      targetRevision: main
+      path: platform/longhorn
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: longhorn-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
