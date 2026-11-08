@@ -1,0 +1,32 @@
+# metrics-server: live CPU/memory for `kubectl top`, the HPA, and the Kubernetes Dashboard (metrics.k8s.io API).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metrics-server
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes-sigs.github.io/metrics-server/
+    chart: metrics-server
+    targetRevision: 3.14.0
+    helm:
+      valuesObject:
+        image:
+          tag: v0.9.1          # chart ships 0.9.0; 0.9.1 is the patch release
+        args:
+          # kubeadm kubelets serve self-signed certs, so skip verifying them (traffic stays inside the cluster)
+          - --kubelet-insecure-tls
+        resources:
+          requests: { cpu: 50m, memory: 64Mi }
+          limits: { memory: 256Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [ServerSideApply=true]

@@ -40,7 +40,7 @@ const nsName = (o) => (o.metadata.namespace ? o.metadata.namespace + '/' : '') +
 
 async function main() {
   const L = async (p) => { const r = await get(p); if (r.error) errors.push(r.error); return r; };
-  const [pods, svcs, pvcs, pvs, nodes, nss, ings, ingClasses, jobs, deps, stss, dss, vwh, mwh, apps, lhVols] = await Promise.all([
+  const [pods, svcs, pvcs, pvs, nodes, nss, ings, ingClasses, jobs, deps, stss, dss, vwh, mwh, apps, lhVols, apiSvcs] = await Promise.all([
     L('/api/v1/pods'), L('/api/v1/services'), L('/api/v1/persistentvolumeclaims'), L('/api/v1/persistentvolumes'),
     L('/api/v1/nodes'), L('/api/v1/namespaces'), L('/apis/networking.k8s.io/v1/ingresses'),
     L('/apis/networking.k8s.io/v1/ingressclasses'), L('/apis/batch/v1/jobs'), L('/apis/apps/v1/deployments'),
@@ -48,6 +48,7 @@ async function main() {
     L('/apis/admissionregistration.k8s.io/v1/validatingwebhookconfigurations'),
     L('/apis/admissionregistration.k8s.io/v1/mutatingwebhookconfigurations'),
     L('/apis/argoproj.io/v1alpha1/applications'), L('/apis/longhorn.io/v1beta2/volumes'),
+    L('/apis/apiregistration.k8s.io/v1/apiservices'),
   ]);
 
   // --- Nodes: not ready, cordoned, mismatched kubelet versions
@@ -152,15 +153,23 @@ async function main() {
   const tracked = (o) => {
     const a = o.metadata.annotations || {};
     const l = o.metadata.labels || {};
-    return a['argocd.argoproj.io/tracking-id'] || l['app.kubernetes.io/instance'] || l['argocd.argoproj.io/instance'] ||
+    // Argo CD 3.x marks everything it applies with the tracking-id annotation. A plain Helm label is NOT
+    // enough: a manual `helm install` has app.kubernetes.io/instance too.
+    return a['argocd.argoproj.io/tracking-id'] || l['argocd.argoproj.io/instance'] ||
       // created by an operator that Argo CD manages (Tailscale proxies, Longhorn CSI driver, ...)
-      l['tailscale.com/managed'] || Object.keys(l).some((k) => k.endsWith('/managed-by'));
+      l['tailscale.com/managed'] || Object.keys(l).some((k) => k.endsWith('/managed-by') && l[k] !== 'Helm');
   };
   const owned = (o) => (o.metadata.ownerReferences || []).length > 0;
   const withKind = (list, kind) => list.items.map((o) => Object.assign({ kind }, o));
   for (const w of withKind(deps, 'Deployment').concat(withKind(stss, 'StatefulSet'), withKind(dss, 'DaemonSet'))) {
     if (SYSTEM_NS.has(w.metadata.namespace) || owned(w) || w.metadata.namespace === 'argocd') continue;
     if (!tracked(w)) add('workload_unmanaged', 'review', w.kind + ' ' + nsName(w), 'not managed by Argo CD (manual install?)');
+  }
+
+  // --- Aggregated APIs (metrics.k8s.io etc.) that nothing serves: kubectl and dashboards error against them
+  for (const a of apiSvcs.items) {
+    const av = (a.status && a.status.conditions || []).find((c) => c.type === 'Available');
+    if (av && av.status !== 'True') add('apiservice_unavailable', 'problem', a.metadata.name, (av.reason || '') + ' ' + (av.message || '').slice(0, 160));
   }
 
   // --- Namespaces with nothing running in them
